@@ -90,6 +90,7 @@ class Player(ABC):
         return self.__scroe
 
     def add_point(self, score: int):
+        '''增加分數'''
         self.__scroe += score
 
     @property
@@ -101,6 +102,7 @@ class Player(ABC):
         return len(self.__hand_card_list)
 
     def add_hand_card(self, card: Card):
+        '''增加手牌'''
         if len(self.hands) >= 13:
             raise ValueError("手牌數量不能超過13張")
         self.__hand_card_list.append(card)
@@ -242,6 +244,7 @@ class Showdown:
 
     def name_players(self):
         for pidx, player in enumerate(self.player_list):
+            print(f"輸入 P{pidx+1} 玩家名稱:")
             player.name_self()
             print(f"P{pidx+1} 玩家 {player.name} 加入遊戲")
 
@@ -329,7 +332,8 @@ class Showdown:
             if player.point > max_score:
                 max_score = player.point
                 max_score_idx = idx + 1
-        print(f'勝者: P{max_score_idx} {self.player_list[max_score_idx].name}')
+        print(
+            f'勝者: P{max_score_idx + 1} {self.player_list[max_score_idx].name}')
 
 
 if __name__ == '__main__':

@@ -1,9 +1,8 @@
 import os
 import sys
 import traceback
+from dataclasses import dataclass
 from pathlib import Path
-
-from pydantic import BaseModel
 
 
 def is_relative_to(path1, path2):
@@ -15,7 +14,8 @@ def is_relative_to(path1, path2):
         return False
 
 
-class Error(BaseModel):
+@dataclass
+class Error:
     '''Error Model'''
     title: str
     message: str
