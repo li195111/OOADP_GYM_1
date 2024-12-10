@@ -1,9 +1,53 @@
+from __future__ import annotations
+
 import random
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from models.base import Error
+
+
+class ExchangeHandsPrivilege:
+
+    def __init__(self):
+        self.__use_count = 0
+        self.__use_round = None
+        self.__source_player = None
+        self.__target_player = None
+
+    @property
+    def use_count(self):
+        return self.__use_count
+
+    @property
+    def source_player(self):
+        return self.__source_player
+
+    @property
+    def target_player(self):
+        return self.__target_player
+
+    @property
+    def exchange_round(self):
+        return self.__use_round
+
+    def use(self, round: int, src_player: Player, tgt_player: Player):
+        if self.use_count == 1:
+            raise ValueError("特權已經使用過了")
+        print(f"P{src_player.id} 對 P{tgt_player.id}使用特權")
+        self.__use_round = round
+        self.__source_player = src_player
+        self.__target_player = tgt_player
+        self.__use_count += 1
+        # 交換手牌
+        self.source_player.hands, self.target_player.hands = self.target_player.hands, self.source_player.hands
+
+    def restore(self):
+        if not self.__target_player:
+            raise ValueError("尚未使用特權，無法回復手牌")
+        # 交換手牌回復
+        self.source_player.hands, self.target_player.hands = self.target_player.hands, self.source_player.hands
 
 
 class Suit(Enum):
@@ -47,7 +91,7 @@ class Card:
         return self.__suit
 
     def __repr__(self):
-        return f"{self.__suit.value['symbol']} {self.__rank.value['value']}"
+        return f"{self.__suit.value['symbol']} {self.__rank.value['symbol']}"
 
 
 class Deck:
@@ -80,10 +124,16 @@ class Deck:
 class Player(ABC):
     '''玩家'''
 
-    def __init__(self):
+    def __init__(self, player_id: int, privilege: ExchangeHandsPrivilege):
+        self.__id = player_id
         self.__scroe: int = 0
         self.__hand_card_list: List[Card] = []
         self.__name: Optional[str] = None
+        self.privilege = privilege
+
+    @property
+    def id(self):
+        return self.__id
 
     @property
     def point(self):
@@ -95,7 +145,11 @@ class Player(ABC):
 
     @property
     def hands(self):
-        return tuple(self.__hand_card_list)
+        return self.__hand_card_list
+
+    @hands.setter
+    def hands(self, cards: List[Card]):
+        self.__hand_card_list = cards
 
     @property
     def hands_count(self):
@@ -128,15 +182,23 @@ class Player(ABC):
         '''玩家取名'''
         ...
 
+    @abstractmethod
+    def use_privilege(self, round: int, player_map: Dict[int, Player]):
+        '''使用特權'''
+        ...
+
 
 class HumanPlayer(Player):
     '''人類玩家'''
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, player_id: int, privilege: ExchangeHandsPrivilege):
+        super().__init__(player_id=player_id, privilege=privilege)
 
     def make_decision(self) -> Card:
         '''使用指令介面輸入 (Command Line Interface) 來做選擇'''
+        if self.hands_count == 0:
+            # 手牌已經出完
+            return
         try:
             num = eval(input("請輸入你想出第幾張牌的數字: "))
             if num < 0 or num >= self.hands_count:
@@ -151,25 +213,68 @@ class HumanPlayer(Player):
 
     def name_self(self):
         '''使用指令介面輸入 (Command Line Interface) 來取名'''
-        name = input("請輸入你的名字: ")
+        name = input(f"P{self.id} 請輸入你的名字: ")
         self.name = name
+        print(f"P{self.id} 玩家 {name} 加入遊戲")
+
+    def use_privilege(self, round: int, player_map: Dict[int, Player]):
+        '''使用特權'''
+        if self.privilege.use_count == 0:
+            is_use_privilege = input("是否使用特權? (Y/n): ")
+            if is_use_privilege.lower() == 'y':
+                print(f"{self.name} 使用特權")
+                player_names = [f'P{player_id} {p.name}' for player_id,
+                                p in player_map.items() if p != self]
+                player_id_list = list(player_map.keys())
+                min_id = min(player_id_list)
+                max_id = max(player_id_list)
+                num = eval(
+                    input(f"玩家列表:\n{player_names}\n請輸入{min_id}~{max_id}來指定交換手牌的玩家: "))
+                if not num in player_map:
+                    raise ValueError(f"Invalid number `{num}`")
+                player = player_map[num]
+                self.privilege.use(round, self, player)
+        else:
+            # 檢查是否要回復手牌
+            if round - self.privilege.exchange_round > 3:
+                print(f"P{self.id} 特權失效，回復手牌")
+                self.privilege.restore()
 
 
 class AIPlayer(Player):
     '''AI玩家'''
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, player_id: int, privilege: ExchangeHandsPrivilege):
+        super().__init__(player_id=player_id, privilege=privilege)
 
     def make_decision(self):
         '''AI玩家隨機做選擇'''
+        if self.hands_count == 0:
+            # 手牌已經出完
+            return
         choice_card = random.choice(self.hands)
         self.drop_hands(choice_card)
         return choice_card
 
     def name_self(self):
         '''AI玩家取名'''
-        self.name = "AI Player"
+        self.name = f"AI Player-{self.id}"
+        print(f"P{self.id} 玩家 {self.name} 加入遊戲")
+
+    def use_privilege(self, round: int, player_map: Dict[int, Player]):
+        '''使用特權，AI玩家隨機做選擇'''
+        if self.privilege.use_count == 0:
+            is_use_privilege = random.random() > 0.5
+            if is_use_privilege:
+                # 隨機選擇除了自己以外的一位玩家
+                player = random.choice(
+                    [p for p in player_map.values() if p != self])
+                self.privilege.use(round, self, player)
+        else:
+            # 檢查是否要回復手牌
+            if round - self.privilege.exchange_round > 3:
+                print(f"P{self.id} 特權失效，回復手牌")
+                self.privilege.restore()
 
 
 class Showdown:
@@ -179,7 +284,7 @@ class Showdown:
         self.__round: int = 0
         self.__human_num: int = 0
         self.__ai_num: int = 0
-        self.player_list: List[Player] = []  # P1 ~ P4
+        self.player_map: Dict[int, Player] = {}  # P1 ~ P4
         self.max_support_players: int = 4
         self.deck = deck
 
@@ -199,8 +304,10 @@ class Showdown:
             raise ValueError(f"遊戲最多支援{self.max_support_players}人")
         self.__human_num = num
         for _ in range(num):
-            player = HumanPlayer()
-            self.player_list.append(player)
+            privilege = ExchangeHandsPrivilege()
+            player_id = len(self.player_map) + 1
+            player = HumanPlayer(player_id=player_id, privilege=privilege)
+            self.player_map[player_id] = player
 
     @property
     def ai_num(self):
@@ -214,8 +321,10 @@ class Showdown:
             raise ValueError(f"遊戲最多支援{self.max_support_players}人")
         self.__ai_num = num
         for _ in range(num):
-            player = AIPlayer()
-            self.player_list.append(player)
+            privilege = ExchangeHandsPrivilege()
+            player_id = len(self.player_map) + 1
+            player = AIPlayer(player_id=player_id, privilege=privilege)
+            self.player_map[player_id] = player
 
     @property
     def total_players(self):
@@ -243,10 +352,8 @@ class Showdown:
             return self.input_ai_player_number()
 
     def name_players(self):
-        for pidx, player in enumerate(self.player_list):
-            print(f"輸入 P{pidx+1} 玩家名稱:")
+        for player in self.player_map.values():
             player.name_self()
-            print(f"P{pidx+1} 玩家 {player.name} 加入遊戲")
 
     def start(self):
         # 設定玩家人數
@@ -259,34 +366,37 @@ class Showdown:
         self.deck.shuffle()
         # 抽牌階段
         cards_per_player = 52 // self.total_players
-        while sum([p.hands_count for p in self.player_list]) < cards_per_player * self.total_players:
-            for player in self.player_list:
+        while sum([p.hands_count for _, p in self.player_map.items()]) < cards_per_player * self.total_players:
+            for player_id, player in self.player_map.items():
                 card = self.deck.draw()
                 player.add_hand_card(card)
                 if self.deck.card_count == 0:
                     print("牌堆已經抽完")
                     break
         # 遊戲回合開始, 直到回合數等於玩家手牌數 或 所有玩家手牌數為0
-        while self.round_count <= cards_per_player and sum([p.hands_count for p in self.player_list]) > 0:
+        while self.round_count <= cards_per_player and sum([p.hands_count for _, p in self.player_map.items()]) > 0:
             # 開始新的一輪
             self.rount_start()
             # 玩家輪流出牌
-            card_list: List[Card] = []
-            for player in self.player_list:
-                # 是否使用特權
-                #
+            card_map: Dict[int, Card] = {}
+            for player_id, player in self.player_map.items():
+                # 是否使用特權 or 是否三回合後回復手牌
+                player.use_privilege(self.round_count, self.player_map)
+
                 # 出牌
                 card = player.make_decision()
-                card_list.append(card)
+                if not card:
+                    # 手牌已經出完, 不參與比牌
+                    continue
+                card_map[player_id] = card
 
-            print(f'第{self.round_count}局出牌結果: {card_list}')
             # 比牌
-            winner_idx = self.compare_cards(card_list)
-            print(f'第{self.round_count}局由 P{winner_idx+1} 玩家獲勝')
-            self.player_list[winner_idx].add_point(1)
+            winner_id = self.compare_cards(card_map)
+            print(f'第{self.round_count}局由 P{winner_id} 玩家獲勝')
+            self.player_map[winner_id].add_point(1)
 
             # 顯示牌
-            self.show_cards(card_list)
+            self.show_cards(card_map)
 
         # 遊戲結束
         self.stop()
@@ -295,7 +405,7 @@ class Showdown:
         '''新的一輪開始'''
         self.__round += 1
 
-    def compare_cards(self, card_list: List[Card]) -> int:
+    def compare_cards(self, card_map: Dict[int, Card]) -> int:
         '''比較出牌
         先比較牌的階級，此時階級較大者勝，如果階級相同則比較花色，此時花色較大者勝。
 
@@ -305,35 +415,40 @@ class Showdown:
         Return:
             int: 勝利者的索引
         '''
-        max_card = card_list[0]
-        max_idx = 0
-        for idx, card in enumerate(card_list[1:]):
+        player_ids = list(card_map.keys())
+        max_id = player_ids[0]
+        max_card = card_map[max_id]
+        for player_id in player_ids[1:]:
+            card = card_map[player_id]
             if card.rank.value['value'] > max_card.rank.value['value']:
                 # 階級較大者勝
                 max_card = card
-                max_idx = idx
+                max_id = player_id
             elif card.rank.value['value'] == max_card.rank.value['value']:
                 # 階級相同比較花色
                 if card.suit.value['value'] > max_card.suit.value['value']:
                     max_card = card
-                    max_idx = idx
-        return max_idx
+                    max_id = player_id
+        return max_id
 
-    def show_cards(self, card_list: List[Card]):
-        print(f'第{self.round_count}局出牌結果: {card_list}')
+    def show_cards(self, card_map: Dict[int, Card]):
+        print(f'第{self.round_count}局出牌結果: {card_map}')
 
     def stop(self):
         '''遊戲結束'''
         print('遊戲結束')
-        print(f'玩家得分: ', [f'{p.name}: {p.point}' for p in self.player_list])
-        max_score = self.player_list[0].point
-        max_score_idx = 0
-        for idx, player in enumerate(self.player_list[1:]):
+        print(f'玩家得分: ', [
+              f'{p.name}: {p.point}' for _, p in self.player_map.items()])
+        player_ids = list(self.player_map.keys())
+        max_score_idx = player_ids[0]
+        max_score = self.player_map[max_score_idx].point
+        for player_id in player_ids[1:]:
+            player = self.player_map[player_id]
             if player.point > max_score:
                 max_score = player.point
-                max_score_idx = idx + 1
+                max_score_idx = player_id
         print(
-            f'勝者: P{max_score_idx + 1} {self.player_list[max_score_idx].name}')
+            f'勝者: P{max_score_idx} {self.player_map[max_score_idx].name}')
 
 
 if __name__ == '__main__':
