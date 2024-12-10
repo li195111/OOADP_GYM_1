@@ -53,7 +53,7 @@ class ExchangeHandsPrivilege:
         self.source_player.hands, self.target_player.hands = self.target_player.hands, self.source_player.hands
 
     def restore(self):
-        if not self.__target_player:
+        if not self.target_player or not self.use_count:
             raise ValueError("尚未使用特權，無法回復手牌")
         # 交換手牌回復
         self.source_player.hands, self.target_player.hands = self.target_player.hands, self.source_player.hands
