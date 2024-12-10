@@ -15,6 +15,7 @@ class ExchangeHandsPrivilege:
         self.__use_round = None
         self.__source_player = None
         self.__target_player = None
+        self.__is_expired = False
 
     @property
     def use_count(self):
@@ -32,6 +33,14 @@ class ExchangeHandsPrivilege:
     def exchange_round(self):
         return self.__use_round
 
+    @property
+    def is_expired(self):
+        return self.__is_expired
+
+    @is_expired.setter
+    def is_expired(self, is_expired: bool):
+        self.__is_expired = is_expired
+
     def use(self, round: int, src_player: Player, tgt_player: Player):
         if self.use_count == 1:
             raise ValueError("特權已經使用過了")
@@ -48,6 +57,7 @@ class ExchangeHandsPrivilege:
             raise ValueError("尚未使用特權，無法回復手牌")
         # 交換手牌回復
         self.source_player.hands, self.target_player.hands = self.target_player.hands, self.source_player.hands
+        self.is_expired = True
 
 
 class Suit(Enum):
@@ -236,7 +246,7 @@ class HumanPlayer(Player):
                 self.privilege.use(round, self, player)
         else:
             # 檢查是否要回復手牌
-            if round - self.privilege.exchange_round > 3:
+            if not self.privilege.is_expired and round - self.privilege.exchange_round > 3:
                 print(f"P{self.id} 特權失效，回復手牌")
                 self.privilege.restore()
 
@@ -272,7 +282,7 @@ class AIPlayer(Player):
                 self.privilege.use(round, self, player)
         else:
             # 檢查是否要回復手牌
-            if round - self.privilege.exchange_round > 3:
+            if not self.privilege.is_expired and round - self.privilege.exchange_round > 3:
                 print(f"P{self.id} 特權失效，回復手牌")
                 self.privilege.restore()
 
