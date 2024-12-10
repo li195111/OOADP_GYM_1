@@ -375,21 +375,34 @@ class Showdown:
         print("開始洗牌")
         self.deck.shuffle()
         # 抽牌階段
-        cards_per_player = 52 // self.total_players
-        while sum([p.hands_count for _, p in self.player_map.items()]) < cards_per_player * self.total_players:
+        hands_count_limit = 13
+        while sum([p.hands_count == hands_count_limit for _, p in self.player_map.items()]) != self.total_players:
             for player_id, player in self.player_map.items():
+
                 card = self.deck.draw()
+
                 player.add_hand_card(card)
+
                 if self.deck.card_count == 0:
                     print("牌堆已經抽完")
                     break
+
         # 遊戲回合開始, 直到回合數等於玩家手牌數 或 所有玩家手牌數為0
-        while self.round_count <= cards_per_player and sum([p.hands_count for _, p in self.player_map.items()]) > 0:
+        # 13回合後 且 玩家手牌數=0 時結束
+        while self.round_count < hands_count_limit or \
+                sum([p.hands_count for _, p in self.player_map.items()]) > 0:
+
+            # 顯示玩家剩餘手牌
+            for player_id, player in self.player_map.items():
+                print(f'P{player_id} 剩餘手牌: ', player.hands_count)
+
             # 開始新的一輪
             self.rount_start()
+
             # 玩家輪流出牌
             card_map: Dict[int, Card] = {}
             for player_id, player in self.player_map.items():
+
                 # 是否使用特權 or 是否三回合後回復手牌
                 player.use_privilege(self.round_count, self.player_map)
 
