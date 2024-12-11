@@ -292,8 +292,6 @@ class Showdown:
 
     def __init__(self, deck: Deck):
         self.__round: int = 0
-        self.__human_num: int = 0
-        self.__ai_num: int = 0
         self.player_map: Dict[int, Player] = {}  # P1 ~ P4
         self.max_support_players: int = 4
         self.deck = deck
@@ -303,72 +301,22 @@ class Showdown:
         return self.__round
 
     @property
-    def human_num(self):
-        return self.__human_num
-
-    @human_num.setter
-    def human_num(self, num: int):
-        if num < 0:
-            raise ValueError("人數不能為負數")
-        if num > self.max_support_players:
-            raise ValueError(f"遊戲最多支援{self.max_support_players}人")
-        self.__human_num = num
-        for _ in range(num):
-            privilege = ExchangeHandsPrivilege()
-            player_id = len(self.player_map) + 1
-            player = HumanPlayer(player_id=player_id, privilege=privilege)
-            self.player_map[player_id] = player
-
-    @property
-    def ai_num(self):
-        return self.__ai_num
-
-    @ai_num.setter
-    def ai_num(self, num: int):
-        if num < 0:
-            raise ValueError("人數不能為負數")
-        if num > self.max_support_players:
-            raise ValueError(f"遊戲最多支援{self.max_support_players}人")
-        self.__ai_num = num
-        for _ in range(num):
-            privilege = ExchangeHandsPrivilege()
-            player_id = len(self.player_map) + 1
-            player = AIPlayer(player_id=player_id, privilege=privilege)
-            self.player_map[player_id] = player
-
-    @property
     def total_players(self):
-        return self.human_num + self.ai_num
+        return len(self.player_map)
 
-    def input_human_player_number(self):
-        human_num = eval(input("輸入人類玩家數量: "))
-        try:
-            self.human_num = human_num
-        except Exception as e:
-            err = Error.from_exc("ValueError", e)
-            print(err.title, err.message)
-            return self.input_human_player_number()
-
-    def input_ai_player_number(self):
-        if self.total_players == self.max_support_players:
-            return
-        # ai_num = eval(input("輸入AI玩家數量: "))
-        ai_num = self.max_support_players - self.human_num
-        try:
-            self.ai_num = ai_num
-        except Exception as e:
-            err = Error.from_exc("ValueError", e)
-            print(err.title, err.message)
-            return self.input_ai_player_number()
+    def add_player(self, player: Player):
+        '''新增玩家'''
+        if len(self.player_map) > self.max_support_players:
+            raise ValueError(f"遊戲最多支援{self.max_support_players}人")
+        if player.id in self.player_map:
+            raise ValueError(f"玩家{player.id}已經存在")
+        self.player_map[player.id] = player
 
     def name_players(self):
         for player in self.player_map.values():
             player.name_self()
 
     def start(self):
-        # 設定玩家人數
-        self.input_human_player_number()
-        self.input_ai_player_number()
         # 請玩家取名
         self.name_players()
         # 洗牌階段
@@ -475,6 +423,19 @@ class Showdown:
 
 
 if __name__ == '__main__':
+    privilege_1 = ExchangeHandsPrivilege()
+    player_1 = AIPlayer(player_id=1, privilege=privilege_1)
+    privilege_2 = ExchangeHandsPrivilege()
+    player_2 = AIPlayer(player_id=2, privilege=privilege_2)
+    privilege_3 = ExchangeHandsPrivilege()
+    player_3 = AIPlayer(player_id=3, privilege=privilege_3)
+    privilege_4 = ExchangeHandsPrivilege()
+    player_4 = AIPlayer(player_id=4, privilege=privilege_4)
+
     deck = Deck()
     showdown = Showdown(deck)
+    showdown.add_player(player_1)
+    showdown.add_player(player_2)
+    showdown.add_player(player_3)
+    showdown.add_player(player_4)
     showdown.start()
